@@ -7,7 +7,11 @@ library(stringi)
 
 #Transfermarkt
 #Valores de mercado
-df1 <- get_player_market_values(country_name = "Brazil", start_year = 2021)
+df1 <- tm_player_market_values(country_name = "Brazil", start_year = 2021)
+df1$concatenado <- paste(df1$player_name,"_",df1$squad)
+df1 <- df1 %>% select(7,13,14,18,20)
+
+
 #Estatisticas
 df2 <- tm_squad_stats(team_url = "https://www.transfermarkt.com/se-palmeiras-sao-paulo/startseite/verein/1023/saison_id/2022")
 
@@ -19,6 +23,7 @@ df5 <- fotmob_get_season_stats(
   team_or_player = "player"
 )
 
+#separando variaveis descritivas para remodelagem da base
 df_desc <- df5 %>% select(10,9,11,16,15,20)
 df_desc <- unique(df_desc)
 
@@ -28,6 +33,7 @@ df5 <- df5 %>% pivot_wider(names_from = stat_name, values_from = stat_value)
 df5 <- df5 %>%
   replace(is.na(.), 0)
 
+#retornando variaveis descritivas a base princiapal, pos remodelagem
 df5 <- left_join(df5, df_desc, by="particiant_id") 
 
 
@@ -45,6 +51,15 @@ names(Brazilian_teams)[1] <- "team_name_transfermarkt"
 
 #Selecionando colunas uteis
 Brazilian_teams <- Brazilian_teams %>% select(1,4,6,7,8)
+
+
+back <- Brazilian_teams
+Brazilian_teams <- back
+
+#informacoes de valores de mercado e perna preferida
+Brazilian_teams$concatenado <- paste(Brazilian_teams$player_name,"_",Brazilian_teams$team_name_transfermarkt)
+Brazilian_teams <- left_join(Brazilian_teams, df1, by="concatenado")
+Brazilian_teams <- Brazilian_teams %>% select(-6)
 
 #Aplicando tecnicas de mineracao de texto para padronizar nomes de APIs diferentes
 #A fim de unificar as bases extraidas do Transfermarkt e Fotmob
@@ -90,8 +105,36 @@ team_names <- data.frame(team_name_fotmob, team_name_transfermarkt)
 Brazilian_teams$team_name_DEPARA <- left_join(Brazilian_teams, team_names, by="team_name_transfermarkt")
 Brazilian_teams$team_name_DEPARA <- Brazilian_teams$team_name_DEPARA$team_name_fotmob
 Brazilian_teams$concatenado <- paste(Brazilian_teams$player_name,"_",Brazilian_teams$team_name_DEPARA)
+Brazilian_teams <- Brazilian_teams %>% select(7,3,4)
+#Brazilian_teams2 <- Brazilian_teams
+
+
+teste1 <- Brazilian_teams
+teste2 <- df5
+
+df5 <- teste2
 
 df5$concatenado <- paste(df5$participant_name,"_",df5$team_name)
+#A GRANDE MAIORIA DOS RESTANTES SAIRAM DOS SEUS TIMES
+#ALTERANDO JOGADORES QUE ESTAO CADASTRADOS COM NOMES DIFERENTES, ERRO DE DIGITAÇÃO E QUE NAO FORAM VENDIDOS DE SEUS TIMES
+library(stringr)
+df5$concatenado <- str_replace(df5$concatenado,"RONI _ Palmeiras","RONY _ Palmeiras")
+df5$concatenado <- str_replace(df5$concatenado,"MURILO CERQUEIRA _ Palmeiras","MURILO _ Palmeiras")
+df5$concatenado <- str_replace(df5$concatenado, "JOSE LOPEZ _ Palmeiras","JOSE MANUEL LOPEZ _ Palmeiras")
+df5$concatenado <- str_replace(df5$concatenado, "LUAN GARCIA _ Palmeiras","LUAN _ Palmeiras")
+df5$concatenado <- str_replace(df5$concatenado,"LUCIANO NEVES _ São Paulo","LUCIANO _ São Paulo")
+df5$concatenado <- str_replace(df5$concatenado,"DIEGO _ São Paulo","DIEGO COSTA _ São Paulo")
+df5$concatenado <- str_replace(df5$concatenado,"SANDRY SANTOS _ Santos","SANDRY _ Santos")
+df5$concatenado <- str_replace(df5$concatenado,"PAULO GANSO _ Fluminense","GANSO _ Fluminense")
+df5$concatenado <- str_replace(df5$concatenado,"VIKTOR HUGO _ Flamengo","VICTOR HUGO _ Flamengo")
+df5$concatenado <- str_replace(df5$concatenado,"RAUL _ Corinthians","RAUL GUSTAVO _ Corinthians")
+df5$concatenado <- str_replace(df5$concatenado,"EDUARDO QUEIROZ _ Corinthians","DU QUEIROZ _ Corinthians")
+df5$concatenado <- str_replace(df5$concatenado,"RAMIRES _ Bragantino","ERIC RAMIRES _ Bragantino")
+df5$concatenado <- str_replace(df5$concatenado,"ARTUR GUIMARAES _ Bragantino","ARTUR _ Bragantino")
+df5$concatenado <- str_replace(df5$concatenado,"VICTOR LEANDRO CUESTA _ Botafogo","VICTOR CUESTA _ Botafogo")
+df5$concatenado <- str_replace(df5$concatenado,"PEDRO ROCHA _ Atlético Paranaense","PEDRO ROCHA _ Fortaleza EC")
+df5$concatenado <- str_replace(df5$concatenado,"RODRIGUINHO _ América Mineiro","RODRIGUINHO _ Cuiabá")
+df5$concatenado <- str_replace(df5$concatenado,"JO _ Corinthians","JO _ Ceará")
 df5 <- left_join(df5, Brazilian_teams, by="concatenado")
 
 
@@ -109,7 +152,8 @@ nrow(df5)
 #unique(teste$concatenado)
 write.csv(df5, "C:/Users/thiag/Desktop/df5.csv")
 
-write.csv(df5, "C:/Users/thiag/Desktop/df5.csv")
+write.csv(teste, "C:/Users/thiag/Desktop/teste.csv")
+write.csv(Brazilian_teams, "C:/Users/thiag/Desktop/brazilian_teams.csv")
 
 #rICHARD CEARA NOME IGUAL GOLEIRO E VOLANTE - TRATAR
 #DANILO NOME IGUAL SAIU DO BRASIL
