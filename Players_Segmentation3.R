@@ -6,6 +6,7 @@ library(tm)
 library(stringi)
 library(xlsx)
 
+
 ##### PARTE 1 - DADOS DE DESEMPENHO FUTMOB E REMODELAGEM DE DADOS
 
 df5 <- fotmob_get_season_stats(
@@ -169,18 +170,36 @@ df5<- na.omit(df5)
 #Chencando numero de linhas restantes
 nrow(df5)
 
-#removendo richar dcaso especial
-df5$Exc <- ifelse(df5$particiant_id ==  882625 & df5$player_pos ==  "Goalkeeper" | df5$particiant_id ==  934515 & df5$player_pos ==  "Defensive Midfield" , 1,0)
-df5 <- filter(df5, Exc != 1)
-df5$Exc <- NULL
+#SEGUIMOS COM 457 JOGADORES
 
-#SEGUIMOS COM 466 JOGADORES
 
+
+
+
+#####################
+#df5 <- df5 %>% select(1,28,29,32:35,37,38,30:31,39:50,36,2:27)
+Zone <- function(x) {
+  if(x == "Right Winger") {return("Attacker")}
+  if(x == "Left Winger") {return("Attacker")}
+  if(x == "Centre-Forward") {return("Attacker")}
+  if(x == "Second Striker") {return("Attacker")}
+  if(x == "Attacking Midfield") {return("Midfield")}
+  if(x == "Central Midfield") {return("Midfield")}
+  if(x == "Defensive Midfield") {return("Midfield")}
+  if(x == "Left Midfield") {return("Midfield")}
+  if(x == "Right Midfield") {return("Midfield")}  
+  if(x == "Right-Back") {return("Defender")}  
+  if(x == "Left-Back") {return("Defender")}  
+  if(x == "Centre-Back") {return("Defender")}  
+}
 
 df5$Zone <- ifelse(df5$player_pos ==  "Right Winger" | df5$player_pos == "Left Winger" | df5$player_pos == "Centre-Forward" | df5$player_pos == "Second Striker", "Attacker",
                    ifelse(df5$player_pos ==  "Attacking Midfield" | df5$player_pos == "Central Midfield" | df5$player_pos == "Defensive Midfield" | df5$player_pos == "Left Midfield" | df5$player_pos == "Right Midfield", "Midfield",
                           ifelse(df5$player_pos ==  "Right-Back" | df5$player_pos == "Left-Back" | df5$player_pos == "Centre-Back", "Defender",
                                  "Goalkeeper")))
+
+
+df5 <- df5 %>% select(1,28,29,32:35,38,36,39,40,30:31,37,2:27)
 
 
 #GOLEIROS ESTAO SENDO REPRESENTADOS COMO CATEGORIAS DE CONTROLE, ONDE É A UNICA POSICAO CLASSIFICADA COM 0 EM TODAS AS VARIAVEIS DUMMIES
@@ -189,52 +208,93 @@ df5$Dummie_position <- df5$player_pos
 df5$Dummie <- 1
 df5 <- df5 %>% pivot_wider(names_from = Dummie_position, values_from = Dummie)
 df5<- df5 %>%
-  mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
+ mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
 df5$Goalkeeper <- NULL
 
+#CONSIDERANDO JOGADORES QUE ATUAM EM MEDIA MAIS DE 45 MIN COMO TITULARES
+df5$AVG_time <- round(df5$minutes_played / df5$matches_played,0)
+df5$starting_player <- ifelse(df5$AVG_time > 45 ,1,0)
+#GOLEIROS ESTAO SENDO REPRESENTADOS COMO CATEGORIAS DE CONTROLE AO DEFINIR AS ZONAS DE POSICAO ABAIXO, ONDE SÃO A UNICA ZONA CLASSIFICADA COM 0 EM TODAS AS VARIAVEIS DUMMIES
+df5$Attacking <- ifelse(df5$`Right Winger` == 1 | df5$`Left Winger`  == 1 | df5$`Centre-Forward` == 1 | df5$`Second Striker` == 1, 1, 0)
+df5$Midfield <- ifelse(df5$`Attacking Midfield` == 1 | df5$`Central Midfield` == 1 | df5$`Defensive Midfield` == 1 | df5$`Left Midfield` == 1, 1, 0)
+df5$Defender <- ifelse(df5$`Right-Back` == 1 | df5$`Left-Back` == 1 | df5$`Centre-Back` == 1 , 1, 0)
 
 
-df5 <- df5 %>% select(1,28:29,32:36,38:40,30:31,37,2:27,41:51)
+#removendo caso especial richard ceara, jogador com exatamente o mesmo nome no mesmo time
+df5$Exclude <- ifelse(df5$particiant_id == 934515 & df5$player_pos == 'Defensive Midfield'  | df5$particiant_id == 882625 & df5$player_pos == 'Goalkeeper',1,0)
+df5 <- filter(df5, Exclude != 1)
+df5$Exclude <- NULL
 
-#####################
-#df5 <- df5 %>% select(1,28,29,32:35,37,38,30:31,39:50,36,2:27)
+df5$Matches_90min_played <- round(df5$minutes_played/90,2)
+df5$Big_chances_created_per_match <- round(df5$`Big chances created` / df5$matches_played,2)
+df5$Chances_created_per_match <- round(df5$`Chances created` / df5$matches_played,2)
+df5$Big_chances_missed_per_match <- round(df5$`Big chances missed` / df5$matches_played, 2)
+df5$Goals_Assists_per_match <- round(df5$`Goals + Assists` / df5$matches_played,2)
+df5$Successful_dribbles <- round(df5$Matches_90min_played * df5$`Successful dribbles per 90`)
+df5$Disarms <- round(df5$Matches_90min_played * df5$`Successful tackles per 90`)
+df5$Shots <- round(df5$Matches_90min_played * df5$`Shots per 90`)
+df5$Shots_on_target <- round(df5$Matches_90min_played * df5$`Shots on target per 90`)
+df5$Blocks <- round(df5$Matches_90min_played * df5$`Blocks per 90`)
+df5$Fouls_committed <- round(df5$Matches_90min_played * df5$`Fouls committed per 90`)
+df5$Goals_conceded <- round(df5$Matches_90min_played * df5$`Goals conceded per 90`)
+df5$Clearances <- round(df5$Matches_90min_played * df5$`Clearances per 90`)
+df5$Interceptions <- round(df5$Matches_90min_played * df5$`Interceptions per 90`)
+df5$Possession_won_final_3rd <- round(df5$Matches_90min_played * df5$`Possession won final 3rd per 90`)
+df5$Saves <- round(df5$Matches_90min_played * df5$`Saves per 90`)
+df5$Accurate_long_balls <- round(df5$Matches_90min_played * df5$`Accurate long balls per 90`)
+df5$Accurate_passes <- round(df5$Matches_90min_played * df5$`Accurate passes per 90`)
+
+#df5$Saves_sub_GoalsConceded <- round(df5$Saves - df5$Goals_conceded)
+#df5$Perc_Clean_Sheets <- round(df5$`Clean sheets` / df5$matches_played)
+
+
+
+
+
+#df5 <- df5 %>% select(-c(30,32,36,37,68,72))
+#df5$`Goals conceded per 90` <- NULL
+
 
 BDclusters <- df5
+
+
+
+
 
 #install.packages('caret')
 library(caret)
 
 #NORMALIZANDO DADOS E ARMAZENANDO NA VARIAVEL "DADOS"
-#dados<- scale(BDclusters[,c(12:51)])
+#dados<- scale(BDclusters[,c(6:52)])
 
 #REALIZANDO PREDICAO COM ALGORITMO DE CLUSTERIZACAO E UTILIZANDO METODO DE NORMALIZACAO "SCALE"    
-BDclusters <- predict(preProcess(BDclusters[,12:51], method ="scale") ,BDclusters)
+BDclusters <- predict(preProcess(BDclusters[,12:74], method ="scale") ,BDclusters)
 #COMANDO PARA GARANTIR QUE O LEITOR CHEGUE AO MESMO RESULTADO
 set.seed(1)
 
 #SEPARANDO DIFERENTES TIPOS DE CLUSTERS
-G2 <- kmeans(BDclusters[12:51], centers=2)
-G3 <- kmeans(BDclusters[12:51], centers=3)
-G4 <- kmeans(BDclusters[12:51], centers=4)
-G5 <- kmeans(BDclusters[12:51], centers=5)
-G6 <- kmeans(BDclusters[12:51], centers=6)
-G7 <- kmeans(BDclusters[12:51], centers=7)
-G8 <- kmeans(BDclusters[12:51], centers=8)
-G9 <- kmeans(BDclusters[12:51], centers=9)
-G10 <- kmeans(BDclusters[12:51], centers=10)
-G11 <- kmeans(BDclusters[12:51], centers=11)
+G2 <- kmeans(BDclusters[12:74], centers=2)
+G3 <- kmeans(BDclusters[12:74], centers=3)
+G4 <- kmeans(BDclusters[12:74], centers=4)
+G5 <- kmeans(BDclusters[12:74], centers=5)
+G6 <- kmeans(BDclusters[12:74], centers=6)
+G7 <- kmeans(BDclusters[12:74], centers=7)
+G8 <- kmeans(BDclusters[12:74], centers=8)
+G9 <- kmeans(BDclusters[12:74], centers=9)
+G10 <- kmeans(BDclusters[12:74], centers=10)
+G11 <- kmeans(BDclusters[12:74], centers=11)
 
 library(factoextra) #fviz_cluster function
-viz_G2 <- fviz_cluster(G2, data = BDclusters[,c(12:51)],palette = c("#2E9FDF", "#00AFBB"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G3 <- fviz_cluster(G3, data = BDclusters[,c(12:51)],palette = c("#2E9FDF", "#00AFBB", "#E7B800"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G4 <- fviz_cluster(G4, data = BDclusters[,c(12:51)],palette = c("#E7B800", "#FF00FF","#00FFFF", "#FF1493"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G5 <- fviz_cluster(G5, data = BDclusters[,c(12:51)],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G6 <- fviz_cluster(G6, data = BDclusters[12:51],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G7 <- fviz_cluster(G7, data = BDclusters[12:51],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G8 <- fviz_cluster(G8, data = BDclusters[12:51],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G9 <- fviz_cluster(G9, data = BDclusters[12:51],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G10 <- fviz_cluster(G10, data = BDclusters[12:51],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585", "#C71585" ), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
-viz_G11 <- fviz_cluster(G11, data = BDclusters[12:51],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585", "#C71585", "#C71585" ), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G2 <- fviz_cluster(G2, data = BDclusters[,c(12:74)],palette = c("#2E9FDF", "#00AFBB"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 1")
+viz_G3 <- fviz_cluster(G3, data = BDclusters[,c(12:74)],palette = c("#2E9FDF", "#00AFBB", "#E7B800"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 2")
+viz_G4 <- fviz_cluster(G4, data = BDclusters[,c(12:74)],palette = c("#E7B800", "#FF00FF","#00FFFF", "#FF1493"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 3")
+viz_G5 <- fviz_cluster(G5, data = BDclusters[,c(12:74)],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 4")
+viz_G6 <- fviz_cluster(G6, data = BDclusters[12:74],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 5")
+viz_G7 <- fviz_cluster(G7, data = BDclusters[12:74],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 6")
+viz_G8 <- fviz_cluster(G8, data = BDclusters[12:74],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 7")
+viz_G9 <- fviz_cluster(G9, data = BDclusters[12:74],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585"), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 8")
+viz_G10 <- fviz_cluster(G10, data = BDclusters[12:74],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585", "#C71585" ), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 9")
+viz_G11 <- fviz_cluster(G11, data = BDclusters[12:74],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585", "#C71585", "#C71585" ), geom = "point", ellipse.type = "convex",  ggtheme = theme_classic(), main = "Modelo 10")
 
 
 
@@ -242,13 +302,87 @@ library(gridExtra)
 grid.arrange(viz_G2,viz_G3, viz_G4, viz_G5,viz_G6, viz_G7, viz_G8, viz_G9, viz_G10, viz_G11, nrow=2, ncol=5)
 
 
-viz_G4 <- fviz_cluster(G4, data = BDclusters[,c(12:51)],palette = c("#000000","#000000", "#DC143C","#000000"), geom = "point", ellipse.type = "convex", ggtheme = theme_classic(), main = "2022 Brazilian Championship Players Segmentation with K-means Algorithm")
+#viz_G4 <- fviz_cluster(G4, data = BDclusters[,c(12:74)],palette = c("#000000","#000000", "#DC143C","#000000"), geom = "point", ellipse.type = "convex", ggtheme = theme_classic())
+viz_G3 <- fviz_cluster(G3, data = BDclusters[,c(12:74)],palette = c("#000000","#000000", "#DC143C"), geom = "point", ellipse.type = "convex", ggtheme = theme_classic(), main = "3 Grupos")
 
-
-grid.arrange(viz_G4, nrow=1, ncol=1)
+#grid.arrange(viz_G4, nrow=1, ncol=1)
+grid.arrange(viz_G3, nrow=1, ncol=1)
 
 #BDclusters$G4 <- G4$cluster
-df5$G4 <- G4$cluster
+df5$Cluster <- G3$cluster
+
+
+#Identificando goleiros
+df5$G9 <- G9$cluster
+teste <- filter(df5, G9==3)
+df5$G9 <- NULL
+
+Goalkeepers <- filter(df5, player_pos == "Goalkeeper")
+df5 <- filter(df5, player_pos != "Goalkeeper")
+Goalkeepers$Cluster <- 4
+
+backup<- df5
+
+df5<- rbind(df5,Goalkeepers)
+
+
+library(ggplot2)
+par(mfrow=c(2,4))
+
+#comparacao dos modelos por variavel especifica - Gols
+#boxplot(BDclusters$player_market_value_euro ~ BDclusters$G4, col= c("#000000","#000000", "#000000", "#DC143C"), main="Valor de Mercado")
+boxplot(df5$matches_played ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Partidas jogadas", xlab = "", ylab = "")
+boxplot(df5$minutes_played ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Minutos jogados", xlab = "", ylab = "")
+boxplot(df5$player_age ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Idade", xlab = "", ylab = "")
+boxplot(df5$`Chances created` ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Chances criadas", xlab = "", ylab = "")
+boxplot(df5$`Big chances created` ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Grandes chances criadas", xlab = "", ylab = "")
+boxplot(df5$`Big chances missed` ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Grandes chances perdidas", xlab = "", ylab = "")
+boxplot(df5$Assists ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Assistências", xlab = "", ylab = "")
+boxplot(df5$`Top scorer` ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Gols", xlab = "", ylab = "")
+
+boxplot(df5$Successful_dribbles ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Dribles", xlab = "", ylab = "")
+boxplot(df5$Disarms ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Desarmes", xlab = "", ylab = "")
+boxplot(df5$Shots ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Chutes", xlab = "", ylab = "")
+boxplot(df5$Shots_on_target ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Chutes no gol", xlab = "", ylab = "")
+boxplot(df5$Blocks ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Bloqueios", xlab = "", ylab = "")
+boxplot(df5$Fouls_committed ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Faltas cometidas", xlab = "", ylab = "")
+boxplot(df5$Goals_conceded ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Gols concedidos", xlab = "", ylab = "")
+boxplot(df5$Interceptions ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Interceptações", xlab = "", ylab = "")
+
+boxplot(df5$Possession_won_final_3rd ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Posse ganha no campo final", xlab = "", ylab = "")
+boxplot(df5$Clearances ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Clearances", xlab = "", ylab = "")
+boxplot(df5$Saves ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Defesas", xlab = "", ylab = "")
+boxplot(df5$Accurate_long_balls ~ df5$Cluster, col= c("#DC143C","#00bfff", "#66cdaa", "#d3d3d3"), main="Precisão de passes", xlab = "", ylab = "")
+
+df5_Zone_Freq <- df5 %>% count(Zone, player_pos, Cluster,  sort= TRUE)
+
+library(lattice)
+barchart(Zone ~ n | Cluster, data = df5_Zone_Freq, groups= Zone, stack = T)
+
+Group1 <- filter(df5, Cluster ==1)
+prop.table(table(Group1$Zone))
+
+Group2 <- filter(df5, Cluster ==2)
+prop.table(table(Group2$Zone))
+
+Group3 <- filter(df5, Cluster ==3)
+prop.table(table(Group3$Zone))
+
+Group4 <- filter(df5, Cluster ==4)
+prop.table(table(Group4$Zone))
+
+
+df5 %>% group_by(Cluster) %>% summarise_at(vars(player_age), list(Age_mean = mean))
+
+
+
+#TERMINOU AQUI SAVADO 23/10
+
+
+
+
+
+###################### outros, valor de mercado
 
 
 #AQUI VOU TRAZER AS INFORMACOES DE VALOR DE MERCADO
@@ -256,6 +390,7 @@ df5$G4 <- G4$cluster
 #Valores de mercado
 df1 <- tm_player_market_values(country_name = "Brazil", start_year = 2021)
 backup <- df1
+df1 <- backup
 
 #tratando nomes dos jogadores da base de valores
 df1$player_name <- apply(df1[,7,drop=F],2, removePunctuation)
@@ -265,32 +400,97 @@ df1$player_name<- as.character(df1$player_name)
 df1$player_name <- apply(df1[,7,drop=F],2, toupper)
 #Removendo acentuacoes dos nomes
 df1$player_name <- stri_trans_general(df1$player_name,id="Latin-ASCII")
-df1$concatenado <- paste(df1$player_name,"_",df1$squad)
-df1 <- df1 %>% select(20,13,14,18)
+df3 <- Brazilian_teams %>% select(2,1)
+#df3$concatenado <- paste(df3$player_name,"_",df3$team_name_transfermarkt)
+#df3$player_name <- NULL
+df1 <- left_join(df1, df3,  by="player_name")
+
+df1$concatenado <- paste(df1$player_name,"_",df1$team_name_transfermarkt)
+df1 <- df1 %>% select(21,13,14,18)
 
 
-#back <- df5
-df5 <- back
+back <- df5
+#df5 <- back
 
 df5$concatenado <- paste(df5$player_name,"_",df5$team_name_transfermarkt)
 df5 <- left_join(df5, df1, by="concatenado")
+
+glimpse(df5)
+
+
+teste <- df5 %>% select(1:5,55:60)
+
+
 df5$player_height_mtrs <- as.double(df5$player_height_mtrs)
+
+
+
+unique(df5$particiant_id)
+
+466
+nrow(df5)
+
+
+
+
+
 df5<- df5 %>% select(1:4,8,10:54)
 
 df5$ValorDeMercado <- round(df5$player_market_value_euro/1000000, 2) 
 
 
-#nao foram adicionados
-#df5$TempoMedio <- round(df5$minutes_played / df5$matches_played,0)
-#df5$Titular <- ifelse(df5$TempoMedio > 45 ,1,0)
-#df5$Attacking <- ifelse(df5$`Right Winger` == 1 | df5$`Left Winger`  == 1 | df5$`Centre-Forward` == 1 | df5$`Second Striker` == 1, 1, 0)
-#df5$Midfield <- ifelse(df5$`Attacking Midfield` == 1 | df5$`Central Midfield` == 1 | df5$`Defensive Midfield` == 1 | df5$`Left Midfield` == 1, 1, 0)
-#df5$Defender <- ifelse(df5$`Right-Back` == 1 | df5$`Left-Back` == 1 | df5$`Centre-Back` == 1 , 1, 0)
 
-#install.packages("GGally")
-library(GGally)
-df_corr <- df5 %>% select(2,22,25,38,26,31,27,40,24,32,29,28,6,7)
-ggcorr(df_corr, label=T, layout.exp = 3,hjust=0.90)
+BDclusters <- df5 %>% select(1:46,48,53,55:57,52,49:51)
+
+############################
+#   NOVO CLUSTER  #
+########################
+
+library(caret)
+#REALIZANDO PREDICAO COM ALGORITMO DE CLUSTERIZACAO E UTILIZANDO METODO DE NORMALIZACAO "SCALE"    
+BDclusters <- predict(preProcess(BDclusters[,6:52], method ="scale") ,BDclusters)
+#COMANDO PARA GARANTIR QUE O LEITOR CHEGUE AO MESMO RESULTADO
+set.seed(1)
+
+#SEPARANDO DIFERENTES TIPOS DE CLUSTERS
+G2 <- kmeans(BDclusters[6:52], centers=2)
+G3 <- kmeans(BDclusters[6:52], centers=3)
+G4 <- kmeans(BDclusters[6:52], centers=4)
+G5 <- kmeans(BDclusters[6:52], centers=5)
+G6 <- kmeans(BDclusters[6:52], centers=6)
+G7 <- kmeans(BDclusters[6:52], centers=7)
+G8 <- kmeans(BDclusters[6:52], centers=8)
+G9 <- kmeans(BDclusters[6:52], centers=9)
+G10 <- kmeans(BDclusters[6:52], centers=10)
+G11 <- kmeans(BDclusters[6:52], centers=11)
+
+library(factoextra) #fviz_cluster function
+viz_G2 <- fviz_cluster(G2, data = BDclusters[,c(6:52)],palette = c("#2E9FDF", "#00AFBB"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw(), main = "2 Grupos")
+viz_G3 <- fviz_cluster(G3, data = BDclusters[,c(6:52)],palette = c("#2E9FDF", "#00AFBB", "#E7B800"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw(), main ="3 Grupos")
+viz_G4 <- fviz_cluster(G4, data = BDclusters[,c(6:52)],palette = c("#E7B800", "#FF00FF","#00FFFF", "#FF1493"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G5 <- fviz_cluster(G5, data = BDclusters[,c(6:52)],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G6 <- fviz_cluster(G6, data = BDclusters[6:52],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G7 <- fviz_cluster(G7, data = BDclusters[6:52],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G8 <- fviz_cluster(G8, data = BDclusters[6:52],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G9 <- fviz_cluster(G9, data = BDclusters[6:52],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585"), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G10 <- fviz_cluster(G10, data = BDclusters[6:52],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585", "#C71585" ), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+viz_G11 <- fviz_cluster(G11, data = BDclusters[6:52],palette = c("#2E9FDF", "#00AFBB", "#E7B800", "#FF00FF", "#FF1493","#FF0000",	"#C71585",	"#C71585", "#C71585", "#C71585", "#C71585" ), geom = "point", ellipse.type = "convex", ggtheme = theme_bw())
+
+
+?fviz_cluster()
+
+
+library(gridExtra)
+grid.arrange(viz_G2,viz_G3, viz_G4, viz_G5,viz_G6, viz_G7, viz_G8, viz_G9, viz_G10, viz_G11, nrow=2, ncol=5)
+
+
+
+
+
+#################volta da analise
+df5$ValorDeMercado <- round(df5$player_market_value_euro/1000000, 2) 
+
+
 
 
 
@@ -347,7 +547,7 @@ BDclusters %>% group_by(G3) %>% summarise_at(vars(`Goals per 90`), list(Media = 
 
 
 
-write.csv(df5, "C:/Users/thiag/Desktop/repetdf5.csv")
+write.csv(BDclusters, "C:/Users/thiag/Desktop/BDclusters.csv")
 write.xlsx(df5, sheetName = "df5", file =  "C:/Users/thiag/Desktop/df5.xlsx")
 
 ?write.xlsx
